@@ -1,0 +1,64 @@
+server:
+  port: 8087
+  error:
+    include-message: always              # el frontend muestra el motivo (tarjeta invalida, monto...)
+
+spring:
+  application:
+    name: ms-pagos
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/pedidos360}
+    username: ${DB_USER:admin}
+    password: ${DB_PASSWORD:password123}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+app:
+  # ---- Regla antifraude: mas de N usos de la misma tarjeta en la ventana -> bloqueo + alerta ----
+  fraude:
+    max-intentos: ${FRAUDE_MAX_INTENTOS:3}
+    ventana-segundos: ${FRAUDE_VENTANA_SEGUNDOS:10}
+  # ---- Webpay Plus (Transbank) - ambiente de INTEGRACION (credenciales publicas de prueba) ----
+  webpay:
+    url: ${WEBPAY_URL:https://webpay3gint.transbank.cl/rswebpaytransaction/api/webpay/v1.2}
+    commerce-code: ${WEBPAY_COMMERCE_CODE:597055555532}
+    api-key: ${WEBPAY_API_KEY:579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C}
+    # URL PUBLICA a la que Webpay devuelve al navegador. En AWS = URL del API Gateway (ruta SIN autorizador).
+    return-url: ${WEBPAY_RETURN_URL:http://localhost:8087/api/pagos/webpay/retorno}
+    # Origenes del frontend a los que se puede volver despues de pagar ("*" = cualquiera http/https;
+    # util porque la IP publica del frontend cambia al reiniciar la instancia). Lista separada por comas.
+    front-origins: ${FRONT_ORIGINS:*}
+  # ---- Apache Kafka ----
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092,localhost:9094,localhost:9096}
+    replicas: ${KAFKA_REPLICAS:3}
+    topicos:
+      pagos:                             # resultado de cada intento: historico financiero
+        nombre: pedidos360.pagos
+        particiones: 3
+        retencion-ms: 2592000000         # 30 dias
+        min-isr: 2
+      fraude:                            # alertas antifraude: bajo volumen, orden global
+        nombre: pedidos360.fraude
+        particiones: 1
+        retencion-ms: 7776000000         # 90 dias
+        min-isr: 2
+  # ---- RabbitMQ: comando pago.aprobado (lo consume ms-carrito) ----
+  rabbit:
+    exchange: pedidos360.events
+    routing-keys:
+      pago-aprobado: pago.aprobado       # publica
+  azure:
+    tenant-id: ${AZURE_TENANT_ID:d276cca8-e687-4f20-8984-601387d11401}
+    client-id: ${AZURE_CLIENT_ID:39a9591b-35f1-4165-8cf2-667a2c643920}
+  security:
+    require-roles: ${REQUIRE_ROLES:true}

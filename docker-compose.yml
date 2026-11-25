@@ -1,0 +1,9 @@
+services:
+  ms-pagos:
+    build: .
+    image: pedidos360/ms-pagos
+    container_name: ms-pagos
+    restart: unless-stopped
+    ports:
+      - "8087:8087"
+    env_file: .env      # copia .env.example a .env y completa los valores
